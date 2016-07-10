@@ -1,10 +1,13 @@
 __author__ = 'tomas'
 
 import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 # import tools
 import numpy as np
 import computational_core as cc
+
+import skimage.transform as skitra
 
 from PyQt4 import QtGui
 from viewer_3D import Viewer_3D
@@ -23,6 +26,7 @@ else:
 
 def run(data, mask=None, save_fig=False, smoothing=False, return_all=False, show=False, show_now=True, verbose=True):
     orig_shape = data.shape
+    data = skitra.rescale(data, 0.5, preserve_range=True).astype(np.uint8)
 
     if data.ndim == 2:
         data = np.expand_dims(data, 0)
@@ -31,11 +35,12 @@ def run(data, mask=None, save_fig=False, smoothing=False, return_all=False, show
     # data = tools.smoothing_tv(data, weight=0.05, sliceId=0)
     # data = tools.smoothing_gauss(data, sigma=1, sliceId=0)
     if smoothing:
-        data = tools.smoothing(data, sigmaSpace=5, sigmaColor=0.02, sliceId=0)
+        data = tools.smoothing(data, sigmaSpace=10, sigmaColor=10, sliceId=0)
 
     # cc.hist2gmm(data, debug=verbose)
     # cc.gmm_segmentation(data, debug=verbose)
-    liver_rv = cc.estim_liver_prob_mod(data, show=False, show_now=show_now)
+    # liver_rv = cc.estim_liver_prob_mod(data, show=False, show_now=show_now)
+    _, liver_rv = tools.dominant_class(data, dens_min=10, dens_max=245, show=False, show_now=False)
 
     liver_prob = liver_rv.pdf(data)
     # app = QtGui.QApplication(sys.argv)
@@ -45,15 +50,37 @@ def run(data, mask=None, save_fig=False, smoothing=False, return_all=False, show
     # viewer2.show()
     # sys.exit(app.exec_())
 
-    prob_c = 0.2
-    seeds = liver_prob > (liver_prob.max() * prob_c)
+    # plt.figure()
+    # plt.imshow(liver_prob[0,...], 'gray', interpolation='nearest')
+    # plt.show()
+
+    prob_c = 0.5
+    prob_c_2 = 0.01
+    seeds1 = liver_prob > (liver_prob.max() * prob_c)
+    seeds2 = liver_prob <= (liver_prob.max() * prob_c_2)
+    seeds = seeds1 + 2 * seeds2
+
+    # plt.figure()
+    # plt.subplot(121), plt.imshow(liver_prob[0,...], 'gray', interpolation='nearest')
+    # plt.subplot(122), plt.imshow(seeds[0,...], 'gray', interpolation='nearest')
+    # plt.show()
+
+    gc = GrowCut(data, seeds)
+    gc.run()
+
+    labs = gc.get_labeled_im()
 
     plt.figure()
-    plt.subplot(121), plt.imshow(liver_prob[0,...], 'gray', interpolation='nearest')
-    plt.subplot(122), plt.imshow(seeds[0,...], 'gray', interpolation='nearest')
+    plt.subplot(131), plt.imshow(data[0,...], 'gray', interpolation='nearest')
+    plt.subplot(132), plt.imshow(seeds[0,...], 'jet', interpolation='nearest')
+    divider = make_axes_locatable(plt.gca())
+    cax = divider.append_axes('right', size='5%', pad=0.05)
+    plt.colorbar(cax=cax, ticks=np.unique(seeds))
+    plt.subplot(133), plt.imshow(labs[0,...], 'jet', interpolation='nearest', vmin=0)
+    divider = make_axes_locatable(plt.gca())
+    cax = divider.append_axes('right', size='5%', pad=0.05)
+    plt.colorbar(cax=cax, ticks=np.unique(seeds))
     plt.show()
-
-    gc = GrowCut(data, seeds + 1)
 
     # if show:
     #     plt.show()

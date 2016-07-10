@@ -1,15 +1,34 @@
+from __future__ import division
+
 __author__ = 'Ryba'
 
 import numpy as np
 import Tkinter as tk
 import ttk
 import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 import warnings
 import cv2
 
+import skimage.data as skidat
+import skimage.io as skiio
+import skimage.exposure as skiexp
+import skimage.transform as skitra
+import skimage.color as skicol
+
+import sys
+import os
+if os.path.exists('../../imtools/'):
+    # sys.path.append('../imtools/')
+    sys.path.insert(0, '../../imtools/')
+    from imtools import tools, misc
+else:
+    print 'You need to import package imtools: https://github.com/mjirik/imtools'
+    sys.exit(0)
+
 
 class GrowCut:
-    def __init__(self, data, seeds, maxits=50 ,nghoodtype='sparse', gui=None):
+    def __init__(self, data, seeds, maxits=50, smooth=True, enemies_T=1., nghoodtype='sparse', gui=None):
         '''
         data ... input data; should be 3D in form [slices, rows, columns]
         seeds ... seed points; same shape as data; background should have label 1
@@ -21,6 +40,7 @@ class GrowCut:
         self.maxits = maxits
         self.gui = gui
         self.visfig = None
+        self.smooth = smooth
 
         self.nslices, self.nrows, self.ncols = self.data.shape
         self.npixels = self.nrows * self.ncols
@@ -37,14 +57,14 @@ class GrowCut:
             elif nghoodtype == 'full':
                 self.nghood = 26
 
-        self.seeds = np.reshape( self.seeds, (1, self.nvoxels) ).squeeze()
-        lind = np.ravel_multi_index( np.indices( self.data.shape ), self.data.shape ) #linear indices in array form
-        self.lindv = np.reshape( lind, (1,self.nvoxels) ).squeeze() #linear indices in vector form
-        self.coordsv = np.array( np.unravel_index( self.lindv, self.data.shape ) ) #coords in array [dim * nvoxels]
+        self.seeds = np.reshape(self.seeds, (1, self.nvoxels)).squeeze()
+        lind = np.ravel_multi_index(np.indices(self.data.shape), self.data.shape) #linear indices in array form
+        self.lindv = np.reshape(lind, (1,self.nvoxels)).squeeze() #linear indices in vector form
+        self.coordsv = np.array(np.unravel_index( self.lindv, self.data.shape)) #coords in array [dim * nvoxels]
 
-        self.strengths = np.zeros_like( self.seeds, dtype=np.float64 )
-        self.strengths = np.where( self.seeds, 1., 0. )
-        self.maxC = np.absolute( self.data.max() - self.data.min() )
+        self.strengths = np.zeros_like(self.seeds, dtype=np.float64)
+        self.strengths = np.where(self.seeds, 1., 0.)
+        self.maxC = np.absolute(self.data.max() - self.data.min())
 
         self.labels = self.seeds.copy()
 
@@ -52,7 +72,7 @@ class GrowCut:
         y = np.arange( 0, self.data.shape[1] )
         self.xgrid, self.ygrid = np.meshgrid( x, y )
 
-        self.activePixs = np.argwhere( self.seeds > 0 ).squeeze()
+        self.activePixs = np.argwhere(self.seeds > 0).squeeze()
 
     def run( self):
         self.neighborsM = self.make_neighborhood_matrix()
@@ -104,7 +124,6 @@ class GrowCut:
 
         self.gui.fig.canvas.draw()
 
-
     def get_labeled_im(self):
         return np.reshape(self.labels, self.data.shape)
 
@@ -145,65 +164,86 @@ class GrowCut:
 
         newbies = list()
         for p in self.activePixs:
-            pcoords = tuple(self.coordsv[:,p])
+            pcoords = tuple(self.coordsv[:, p])
             for q in range(self.nghood):
-                nghbInd = self.neighborsM[q,p]
-                if np.isnan( nghbInd ):
+                nghbInd = self.neighborsM[q, p]
+                if np.isnan(nghbInd):
                     continue
-                nghbcoords = tuple(self.coordsv[:,nghbInd])
+                else:
+                    nghbInd = int(nghbInd)
+                nghbcoords = tuple(self.coordsv[:, nghbInd])
                 # with warnings.catch_warnings(record=True) as w:
-                C = np.absolute( self.data[pcoords] - self.data[nghbcoords] )
+                C = np.absolute(self.data[pcoords] - self.data[nghbcoords])
 
-                g = 1 - ( C / self.maxC )
+                g = 1 - (C / self.maxC)
 
                 #attack the neighbor
                 #if g * self.strengths[nghbInd] > self.strengths[p]:
                 if g * self.strengths[p] > self.strengths[nghbInd]:
                     self.strengths[nghbInd] = g * self.strengths[p]
                     labelsN[nghbInd] = self.labels[p]
-                    newbies.append( nghbInd )
+                    newbies.append(nghbInd)
                     converged = False
+
         self.labels = labelsN
         self.activePixs = newbies
+
+        if self.smooth:
+            self.cell_smoothing()
+
         return converged
+
+    def cell_smoothing(self):
+        # TODO: otestovat
+        pts = np.argwhere(self.labels > 0).squeeze()
+
+        for p in pts:
+            lbl = self.labels[p]
+            surr_lbls = [self.labels[q] for q in range(self.nghood)]
+            enemies = [x != lbl for x in surr_lbls]
+            n_enemies = np.array(enemies).sum()
+            if n_enemies >= (self.enemies_T * self.nghood):
+                hist, bins = skiexp.histogram(np.array(surr_lbls))
+                enem_lbl = bins[np.argmax(hist)]
+                self.labels[p] = enem_lbl
 
     def make_neighborhood_matrix(self):
         # print 'start'
         if self.gui:
-            self.gui.statusbar.config( text='Creating neighborhood matrix...' )
-            self.gui.progressbar.set( 0, 'Creating neighborhood matrix...')
+            self.gui.statusbar.config(text='Creating neighborhood matrix...')
+            self.gui.progressbar.set(0, 'Creating neighborhood matrix...')
         if self.nghood == 8:
-            nr = np.array( [-1, -1, -1, 0, 0, 1, 1, 1] )
-            nc = np.array( [-1, 0, 1, -1, 1, -1, 0, 1] )
-            ns = np.zeros( self.nghood )
+            nr = np.array([-1, -1, -1, 0, 0, 1, 1, 1])
+            nc = np.array([-1, 0, 1, -1, 1, -1, 0, 1])
+            ns = np.zeros(self.nghood)
         elif self.nghood == 4:
-            nr = np.array( [-1, 0, 0, 1] )
-            nc = np.array( [0, -1, 1, 0] )
-            ns = np.zeros( self.nghood, dtype=np.int32 )
+            nr = np.array([-1, 0, 0, 1])
+            nc = np.array([0, -1, 1, 0])
+            ns = np.zeros(self.nghood, dtype=np.int32)
         elif self.nghood == 26:
-            nrCenter = np.array( [-1, -1, -1, 0, 0, 1, 1, 1] )
-            ncCenter = np.array( [-1, 0, 1, -1, 1, -1, 0, 1] )
-            nrBorder = np.zeros( [-1, -1, -1, 0, 0, 0, 1, 1, 1] )
-            ncBorder = np.array( [-1, 0, 1, -1, 0, 1, -1, 0, 1] )
-            nr = np.array( np.hstack( (nrBorder, nrCenter, nrBorder) ) )
-            nc = np.array( np.hstack( (ncBorder, ncCenter, ncBorder) ) )
-            ns = np.array( np.hstack( (-np.ones_like(nrBorder), np.zeros_like(nrCenter), np.ones_like(nrBorder)) ) )
+            nrCenter = np.array([-1, -1, -1, 0, 0, 1, 1, 1])
+            ncCenter = np.array([-1, 0, 1, -1, 1, -1, 0, 1])
+            nrBorder = np.zeros([-1, -1, -1, 0, 0, 0, 1, 1, 1])
+            ncBorder = np.array([-1, 0, 1, -1, 0, 1, -1, 0, 1])
+            nr = np.array(np.hstack((nrBorder, nrCenter, nrBorder)))
+            nc = np.array(np.hstack((ncBorder, ncCenter, ncBorder)))
+            ns = np.array(np.hstack((-np.ones_like(nrBorder), np.zeros_like(nrCenter), np.ones_like(nrBorder))))
         elif self.nghood == 6:
-            nrCenter = np.array( [-1, 0, 0, 1] )
-            ncCenter = np.array( [0, -1, 1, 0] )
-            nrBorder = np.array( [0] )
-            ncBorder = np.array( [0] )
-            nr = np.array( np.hstack( (nrBorder, nrCenter, nrBorder) ) )
-            nc = np.array( np.hstack( (ncBorder, ncCenter, ncBorder) ) )
-            ns = np.array( np.hstack( (-np.ones_like(nrBorder), np.zeros_like(nrCenter), np.ones_like(nrBorder)) ) )
+            nrCenter = np.array([-1, 0, 0, 1])
+            ncCenter = np.array([0, -1, 1, 0])
+            nrBorder = np.array([0])
+            ncBorder = np.array([0])
+            nr = np.array(np.hstack((nrBorder, nrCenter, nrBorder)))
+            nc = np.array(np.hstack((ncBorder, ncCenter, ncBorder)))
+            ns = np.array(np.hstack((-np.ones_like(nrBorder), np.zeros_like(nrCenter), np.ones_like(nrBorder))))
         else:
             print 'Wrong neighborhood passed. Exiting.'
             return None
 
-        neighborsM = np.zeros( (self.nghood, self.nvoxels) )
-        for i in range( self.nvoxels ):
-            s, r, c =  tuple( self.coordsv[:,i] )
-            for nghb in range(self.nghood ):
+        neighborsM = np.zeros((self.nghood, self.nvoxels))
+        for i in range(self.nvoxels ):
+            s, r, c =  tuple(self.coordsv[:, i])
+            for nghb in range(self.nghood):
                 rn = r + nr[nghb]
                 cn = c + nc[nghb]
                 sn = s + ns[nghb]
@@ -216,6 +256,39 @@ class GrowCut:
                 self.gui.progressbar.step(1./20)
                 self.gui.canvas.draw()
         if self.gui:
-            self.gui.progressbar.set( 0, '')
-            self.gui.statusbar.config( text='Neighborhood matrix created' )
+            self.gui.progressbar.set(0, '')
+            self.gui.statusbar.config(text='Neighborhood matrix created')
         return neighborsM
+
+
+################################################################################
+################################################################################
+if __name__ == '__main__':
+    img = skidat.camera()
+    # img = skicol.rgb2gray(im)
+    img = skitra.rescale(img, 0.2, preserve_range=True)
+
+    main_cl, main_rv = tools.dominant_class(img, peakT=0.8, dens_min=0, dens_max=255, show=True, show_now=False)
+
+    peak = main_rv.mean()
+    seed_t = 50
+    seeds1 = main_cl
+    seeds2 = np.abs(img - peak) > seed_t
+    seeds = seeds1 + 2 * seeds2
+
+    gc = GrowCut(img, seeds)
+    gc.run()
+    labs = gc.get_labeled_im()
+
+    plt.figure()
+    plt.subplot(131), plt.imshow(img, 'gray', interpolation='nearest')
+    plt.subplot(132), plt.imshow(seeds, 'jet', interpolation='nearest')
+    divider = make_axes_locatable(plt.gca())
+    cax = divider.append_axes('right', size='5%', pad=0.05)
+    plt.colorbar(cax=cax, ticks=np.unique(seeds))
+    plt.subplot(133), plt.imshow(labs[0,...], 'jet', interpolation='nearest', vmin=0)
+    divider = make_axes_locatable(plt.gca())
+    cax = divider.append_axes('right', size='5%', pad=0.05)
+    plt.colorbar(cax=cax, ticks=np.unique(seeds))
+
+    plt.show()
