@@ -66,7 +66,8 @@ class GrowCut:
 
         self.strengths = np.zeros_like(self.seeds, dtype=np.float64)
         self.strengths = np.where(self.seeds, 1., 0.)
-        self.maxC = np.absolute(self.data.max() - self.data.min())
+        self.maxC = self.data.max() - self.data.min()
+        # self.maxC = 441.673
 
         self.labels = self.seeds.copy()
 
@@ -176,6 +177,7 @@ class GrowCut:
                 nghbcoords = tuple(self.coordsv[:, nghbInd])
                 # with warnings.catch_warnings(record=True) as w:
                 C = np.absolute(self.data[pcoords] - self.data[nghbcoords])
+                # C = np.sqrt((self.data[pcoords] - self.data[nghbcoords]) ** 2)
 
                 g = 1 - (C / self.maxC)
 
