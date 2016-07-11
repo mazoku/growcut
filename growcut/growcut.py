@@ -28,7 +28,7 @@ else:
 
 
 class GrowCut:
-    def __init__(self, data, seeds, maxits=50, smooth=True, enemies_T=1., nghoodtype='sparse', gui=None):
+    def __init__(self, data, seeds, maxits=50, smooth_cell=True, enemies_T=1., nghoodtype='sparse', gui=None):
         '''
         data ... input data; should be 3D in form [slices, rows, columns]
         seeds ... seed points; same shape as data; background should have label 1
@@ -37,10 +37,12 @@ class GrowCut:
         self.data = np.array(self.data, ndmin=3)
         # self.data = self.smoothing( self.data )
         self.seeds = seeds
+        self.n_classes = self.seeds.max()
         self.maxits = maxits
         self.gui = gui
         self.visfig = None
-        self.smooth = smooth
+        self.smooth_cell = smooth_cell
+        self.enemies_T = enemies_T
 
         self.nslices, self.nrows, self.ncols = self.data.shape
         self.npixels = self.nrows * self.ncols
@@ -188,24 +190,60 @@ class GrowCut:
         self.labels = labelsN
         self.activePixs = newbies
 
-        if self.smooth:
-            self.cell_smoothing()
+        # plt.figure()
+        # plt.subplot(121), plt.imshow(self.get_labeled_im()[0,...], 'jet', interpolation='nearest', vmin=0, vmax=self.n_classes)
+        # plt.subplot(122), plt.imshow(np.reshape(labelsN, self.data.shape)[0,...], 'jet', interpolation='nearest', vmin=0, vmax=self.n_classes)
+        # plt.show()
+
+        if self.smooth_cell:
+            labelsN_s = self.cell_smoothing(labelsN.copy())
+
+            # plt.figure()
+            # plt.subplot(121), plt.imshow(np.reshape(labelsN, self.data.shape)[0,...], 'jet', interpolation='nearest', vmin=0, vmax=self.n_classes)
+            # plt.subplot(122), plt.imshow(np.reshape(labelsN_s, self.data.shape)[0,...], 'jet', interpolation='nearest', vmin=0, vmax=self.n_classes)
+            # plt.suptitle('# of changes: %i' % (labelsN != labelsN_s).sum())
+            # plt.show()
+
+            self.labels = labelsN_s
 
         return converged
 
-    def cell_smoothing(self):
+    def cell_smoothing(self, data=None):
         # TODO: otestovat
-        pts = np.argwhere(self.labels > 0).squeeze()
+        # self.labels = np.array([[1, 1, 1],[1, 2, 1],[1, 1, 1]]).flatten()
+        if data is None:
+            data = self.labels
+        pts = np.argwhere(data > 0).squeeze()
+
+        # pts_im = np.zeros_like(data)
+        # pts_im[pts] = 1
+        # plt.figure()
+        # plt.subplot(121), plt.imshow(np.reshape(data, self.data.shape)[0,...], 'jet')
+        # plt.subplot(122), plt.imshow(np.reshape(pts_im, self.data.shape)[0,...], 'gray')
+        # plt.show()
 
         for p in pts:
-            lbl = self.labels[p]
-            surr_lbls = [self.labels[q] for q in range(self.nghood)]
+            lbl = data[p]
+            # surr_lbls = []
+            # for q in range(self.nghood):
+            #     nghbInd = self.neighborsM[q, p]
+            #     if np.isnan(nghbInd):
+            #         continue
+            #     else:
+            #         nghbInd = int(nghbInd)
+            #         surr_lbls.append(data[nghbInd])
+            surr_lbls = [data[int(self.neighborsM[q, p])] for q in range(self.nghood)
+                         if not np.isnan(self.neighborsM[q, p])]
             enemies = [x != lbl for x in surr_lbls]
             n_enemies = np.array(enemies).sum()
+            if n_enemies > 0:
+                pass
             if n_enemies >= (self.enemies_T * self.nghood):
                 hist, bins = skiexp.histogram(np.array(surr_lbls))
                 enem_lbl = bins[np.argmax(hist)]
-                self.labels[p] = enem_lbl
+                data[p] = enem_lbl
+
+        return data
 
     def make_neighborhood_matrix(self):
         # print 'start'
@@ -268,15 +306,26 @@ if __name__ == '__main__':
     # img = skicol.rgb2gray(im)
     img = skitra.rescale(img, 0.2, preserve_range=True)
 
-    main_cl, main_rv = tools.dominant_class(img, peakT=0.8, dens_min=0, dens_max=255, show=True, show_now=False)
+    main_cl, main_rv = tools.dominant_class(img, peakT=0.6, dens_min=0, dens_max=255, show=True, show_now=False)
+
+    # plt.figure()
+    # plt.subplot(131), plt.imshow(img, 'gray', interpolation='nearest')
+    # plt.subplot(132), plt.imshow(main_rv.pdf(img), 'gray', interpolation='nearest')
+    # plt.subplot(133), plt.imshow(main_cl, 'gray', interpolation='nearest')
+    # plt.show()
 
     peak = main_rv.mean()
-    seed_t = 50
+    seed_t = 100
     seeds1 = main_cl
     seeds2 = np.abs(img - peak) > seed_t
     seeds = seeds1 + 2 * seeds2
 
-    gc = GrowCut(img, seeds)
+    # plt.figure()
+    # plt.subplot(121), plt.imshow(img, 'gray', interpolation='nearest')
+    # plt.subplot(122), plt.imshow(seeds, 'jet', interpolation='nearest')
+    # plt.show()
+
+    gc = GrowCut(img, seeds, enemies_T=0.7, smooth_cell=False)
     gc.run()
     labs = gc.get_labeled_im()
 

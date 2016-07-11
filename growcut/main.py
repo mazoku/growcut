@@ -7,6 +7,8 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
 import computational_core as cc
 
+import scipy.ndimage.filters as scindifil
+
 import skimage.transform as skitra
 
 from PyQt4 import QtGui
@@ -54,21 +56,39 @@ def run(data, mask=None, save_fig=False, smoothing=False, return_all=False, show
     # plt.imshow(liver_prob[0,...], 'gray', interpolation='nearest')
     # plt.show()
 
-    prob_c = 0.5
+    prob_c = 0.2
     prob_c_2 = 0.01
     seeds1 = liver_prob > (liver_prob.max() * prob_c)
-    seeds2 = liver_prob <= (liver_prob.max() * prob_c_2)
+    seeds2 = liver_prob <= (np.median(liver_prob) * prob_c_2)
     seeds = seeds1 + 2 * seeds2
+
+    # plt.figure()
+    # liver_prob = liver_prob[0,...]
+    # plt.subplot(231), plt.imshow(liver_prob <= liver_prob.mean(), 'gray', interpolation='nearest'), plt.title('mean')
+    # plt.subplot(232), plt.imshow(liver_prob <= liver_prob.min(), 'gray', interpolation='nearest'), plt.title('min')
+    # plt.subplot(233), plt.imshow(liver_prob <= np.median(liver_prob), 'gray', interpolation='nearest'), plt.title('median')
+    # plt.subplot(234), plt.imshow(liver_prob <= 0.5 * np.median(liver_prob), 'gray', interpolation='nearest'), plt.title('0.5 median')
+    # plt.subplot(235), plt.imshow(liver_prob <= 0, 'gray', interpolation='nearest'), plt.title('0.1 median')
+    # plt.show()
 
     # plt.figure()
     # plt.subplot(121), plt.imshow(liver_prob[0,...], 'gray', interpolation='nearest')
     # plt.subplot(122), plt.imshow(seeds[0,...], 'gray', interpolation='nearest')
     # plt.show()
 
-    gc = GrowCut(data, seeds)
+    gc = GrowCut(data, seeds, smooth_cell=False, enemies_T=0.7)
     gc.run()
 
-    labs = gc.get_labeled_im()
+    labs = gc.get_labeled_im().astype(np.uint8)
+    # labs2 = skifil.median(labs[0,...], selem=np.ones((3, 3)))
+    labs_f = scindifil.median_filter(labs, size=3)
+
+    # plt.figure()
+    # plt.subplot(121), plt.imshow(labs[0,...], 'jet', interpolation='nearest')
+    # plt.subplot(122), plt.imshow(labs_f[0,...], 'jet', interpolation='nearest')
+    # plt.show()
+
+    labs = labs_f
 
     plt.figure()
     plt.subplot(131), plt.imshow(data[0,...], 'gray', interpolation='nearest')
