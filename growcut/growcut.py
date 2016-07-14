@@ -23,8 +23,8 @@ if os.path.exists('../../imtools/'):
     sys.path.insert(0, '../../imtools/')
     from imtools import tools, misc
 else:
-    print 'You need to import package imtools: https://github.com/mjirik/imtools'
-    sys.exit(0)
+    print 'Import error in growcut.py. You need to import package imtools: https://github.com/mjirik/imtools'
+    # sys.exit(0)
 
 
 class GrowCut:
