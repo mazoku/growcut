@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import warnings
 import cv2
+import progressbar
 
 import skimage.data as skidat
 import skimage.io as skiio
@@ -23,8 +24,8 @@ if os.path.exists('../../imtools/'):
     sys.path.insert(0, '../../imtools/')
     from imtools import tools, misc
 else:
-    print 'You need to import package imtools: https://github.com/mjirik/imtools'
-    sys.exit(0)
+    print 'Import error in growcut.py. You need to import package imtools: https://github.com/mjirik/imtools'
+    # sys.exit(0)
 
 
 class GrowCut:
@@ -77,17 +78,24 @@ class GrowCut:
 
         self.activePixs = np.argwhere(self.seeds > 0).squeeze()
 
-    def run( self):
+    def run(self):
         self.neighborsM = self.make_neighborhood_matrix()
 
         converged = False
         it = 0
         if self.gui:
-            self.gui.statusbar.config( text='Segmentation in progress...' )
-            self.gui.progressbar.set( 0, '')
-        while not converged:
+            self.gui.statusbar.config(text='Segmentation in progress...')
+            self.gui.progressbar.set(0, '')
+
+        # initialize progressbar
+        widgets = ["Iterations: ", progressbar.Percentage(), " ", progressbar.Bar(), " ", progressbar.ETA()]
+        pbar = progressbar.ProgressBar(maxval=self.maxits, widgets=widgets)
+        pbar.start()
+
+        while (not converged) and (it < self.maxits):
             it += 1
-            print 'iteration #%i' % it
+            pbar.update(it)
+            # print 'iteration #%i' % it
             converged = self.iteration()
 
             if self.gui:
