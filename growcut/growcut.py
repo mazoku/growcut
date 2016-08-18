@@ -109,8 +109,9 @@ class GrowCut:
 
             if converged and self.gui:
                 self.gui.statusbar.config( text='Algorithm converged after {0} iterations'.format(it) )
+        pbar.finish()
 
-        print 'done'
+        # print 'done'
         # qq = np.reshape( self.labels, self.data.shape )
         # plt.figure(), plt.imshow( qq[0,:,:] ), plt.show()
 
