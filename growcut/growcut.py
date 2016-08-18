@@ -16,6 +16,7 @@ import skimage.io as skiio
 import skimage.exposure as skiexp
 import skimage.transform as skitra
 import skimage.color as skicol
+import skimage.morphology as skimor
 
 import sys
 import os
@@ -312,9 +313,15 @@ class GrowCut:
 ################################################################################
 ################################################################################
 if __name__ == '__main__':
-    img = skidat.camera()
-    # img = skicol.rgb2gray(im)
-    img = skitra.rescale(img, 0.2, preserve_range=True)
+    data_fname = '/home/tomas/Data/medical/liver_segmentation/org-exp_183_46324212_venous_5.0_B30f-.pklz'
+    data, mask, voxel_size = tools.load_pickle_data(data_fname)
+
+    slice_ind = 17
+    data_s = data[slice_ind, :, :]
+    img = tools.windowing(data_s)
+    # img = skidat.camera()
+    # # img = skicol.rgb2gray(im)
+    # img = skitra.rescale(img, 0.2, preserve_range=True)
 
     main_cl, main_rv = tools.dominant_class(img, peakT=0.6, dens_min=0, dens_max=255, show=True, show_now=False)
 
@@ -327,6 +334,7 @@ if __name__ == '__main__':
     peak = main_rv.mean()
     seed_t = 100
     seeds1 = main_cl
+    seeds1 = skimor.binary_opening(seeds1, selem=skimor.disk(2))
     seeds2 = np.abs(img - peak) > seed_t
     seeds = seeds1 + 2 * seeds2
 
@@ -340,12 +348,12 @@ if __name__ == '__main__':
     labs = gc.get_labeled_im()
 
     plt.figure()
-    plt.subplot(131), plt.imshow(img, 'gray', interpolation='nearest')
-    plt.subplot(132), plt.imshow(seeds, 'jet', interpolation='nearest')
+    plt.subplot(131), plt.imshow(img, 'gray', interpolation='nearest'), plt.title('input')
+    plt.subplot(132), plt.imshow(seeds, 'jet', interpolation='nearest'), plt.title('seeds')
     divider = make_axes_locatable(plt.gca())
     cax = divider.append_axes('right', size='5%', pad=0.05)
     plt.colorbar(cax=cax, ticks=np.unique(seeds))
-    plt.subplot(133), plt.imshow(labs[0,...], 'jet', interpolation='nearest', vmin=0)
+    plt.subplot(133), plt.imshow(labs[0,...], 'jet', interpolation='nearest', vmin=0), plt.title('segmentation')
     divider = make_axes_locatable(plt.gca())
     cax = divider.append_axes('right', size='5%', pad=0.05)
     plt.colorbar(cax=cax, ticks=np.unique(seeds))
