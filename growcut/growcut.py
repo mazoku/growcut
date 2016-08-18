@@ -10,6 +10,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 import warnings
 import cv2
 import progressbar
+import io3d
 
 import skimage.data as skidat
 import skimage.io as skiio
@@ -314,37 +315,57 @@ class GrowCut:
 ################################################################################
 ################################################################################
 if __name__ == '__main__':
-    data_fname = '/home/tomas/Data/medical/liver_segmentation/org-exp_183_46324212_venous_5.0_B30f-.pklz'
-    data, mask, voxel_size = tools.load_pickle_data(data_fname)
+    # data_fname = '/home/tomas/Data/medical/liver_segmentation/org-exp_183_46324212_venous_5.0_B30f-.pklz'
+    # data, mask, voxel_size = tools.load_pickle_data(data_fname)
+    #
+    # slice_ind = 17
+    # data_s = data[slice_ind, :, :]
+    # img = tools.windowing(data_s)
+    # # img = skidat.camera()
+    # # # img = skicol.rgb2gray(im)
+    # # img = skitra.rescale(img, 0.2, preserve_range=True)
+    #
+    # main_cl, main_rv = tools.dominant_class(img, peakT=0.6, dens_min=0, dens_max=255, show=True, show_now=False)
+    #
+    # # plt.figure()
+    # # plt.subplot(131), plt.imshow(img, 'gray', interpolation='nearest')
+    # # plt.subplot(132), plt.imshow(main_rv.pdf(img), 'gray', interpolation='nearest')
+    # # plt.subplot(133), plt.imshow(main_cl, 'gray', interpolation='nearest')
+    # # plt.show()
+    #
+    # peak = main_rv.mean()
+    # seed_t = 100
+    # seeds1 = main_cl
+    # seeds1 = skimor.binary_opening(seeds1, selem=skimor.disk(2))
+    # seeds2 = np.abs(img - peak) > seed_t
+    # seeds = seeds1 + 2 * seeds2
 
-    slice_ind = 17
-    data_s = data[slice_ind, :, :]
-    img = tools.windowing(data_s)
-    # img = skidat.camera()
-    # # img = skicol.rgb2gray(im)
-    # img = skitra.rescale(img, 0.2, preserve_range=True)
-
-    main_cl, main_rv = tools.dominant_class(img, peakT=0.6, dens_min=0, dens_max=255, show=True, show_now=False)
-
+    # data_fname = '/home/tomas/Data/medical/liver_segmentation/org-exp_183_46324212_venous_5.0_B30f-.pklz'
+    #
+    # slice_ind = 17
+    # data_s = data[slice_ind, :, :]
+    # img = tools.windowing(data_s)
     # plt.figure()
-    # plt.subplot(131), plt.imshow(img, 'gray', interpolation='nearest')
-    # plt.subplot(132), plt.imshow(main_rv.pdf(img), 'gray', interpolation='nearest')
-    # plt.subplot(133), plt.imshow(main_cl, 'gray', interpolation='nearest')
+    # plt.imshow(img, 'gray')
     # plt.show()
 
-    peak = main_rv.mean()
-    seed_t = 100
-    seeds1 = main_cl
-    seeds1 = skimor.binary_opening(seeds1, selem=skimor.disk(2))
-    seeds2 = np.abs(img - peak) > seed_t
-    seeds = seeds1 + 2 * seeds2
+    # data_fname = '/home/tomas/Dropbox/Work/Dizertace/figures/liver_segmentation/FNPL_46324212_191787340.DCM'
+    # img, meta = io3d.read(data_fname)
+    # img = tools.windowing(img[0,...])
+    # cv2.imwrite('/home/tomas/Dropbox/Work/Dizertace/figures/liver_segmentation/input.png', img)
+    data_fname = '/home/tomas/Dropbox/Work/Dizertace/figures/liver_segmentation/input.png'
+    img = cv2.imread(data_fname, 0)
+    img = cv2.resize(img, (0, 0), fx=0.5, fy=0.5)
+
+    # seeds, peaks = tools.seeds_from_hist(img, min_int=1, max_int=254, show=True, show_now=False)
+    seeds, peaks = tools.seeds_from_glcm(img, show=True, show_now=False)
 
     # plt.figure()
     # plt.subplot(121), plt.imshow(img, 'gray', interpolation='nearest')
     # plt.subplot(122), plt.imshow(seeds, 'jet', interpolation='nearest')
     # plt.show()
 
-    gc = GrowCut(img, seeds, enemies_T=0.7, smooth_cell=False)
+    gc = GrowCut(img, seeds, maxits=100, enemies_T=0.7, smooth_cell=True)
     gc.run()
     labs = gc.get_labeled_im()
 
