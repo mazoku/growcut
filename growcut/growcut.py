@@ -18,6 +18,7 @@ import skimage.exposure as skiexp
 import skimage.transform as skitra
 import skimage.color as skicol
 import skimage.morphology as skimor
+import skimage.segmentation as skiseg
 
 import sys
 import os
@@ -28,6 +29,11 @@ if os.path.exists('../../imtools/'):
 else:
     print 'Import error in growcut.py. You need to import package imtools: https://github.com/mjirik/imtools'
     # sys.exit(0)
+
+if os.path.exists('../../thesis/'):
+    # sys.path.append('../imtools/')
+    sys.path.insert(0, '../../thesis/')
+    import identify_liver_blob as ilb
 
 
 class GrowCut:
@@ -357,27 +363,31 @@ if __name__ == '__main__':
     img = cv2.imread(data_fname, 0)
     img = cv2.resize(img, (0, 0), fx=0.5, fy=0.5)
 
-    seeds, peaks = tools.seeds_from_hist(img, min_int=1, max_int=254, show=True, show_now=False)
+    # seeds, peaks = tools.seeds_from_hist(img, min_int=1, max_int=254, show=True, show_now=False)
     # seeds, peaks = tools.seeds_from_glcm(img, show=True, show_now=False)
     # seeds, peaks = tools.seeds_from_glcm_mesh(img, show=True, show_now=False)
-    # seeds, peaks = tools.seeds_from_glcm_meanshift(img, show=True, show_now=False)
+    seeds, peaks = tools.seeds_from_glcm_meanshift(img, show=True, show_now=False)
 
     # plt.figure()
     # plt.subplot(121), plt.imshow(img, 'gray', interpolation='nearest')
     # plt.subplot(122), plt.imshow(seeds, 'jet', interpolation='nearest')
     # plt.show()
 
-    gc = GrowCut(img, seeds, maxits=100, enemies_T=0.7, smooth_cell=True)
+    # gc = GrowCut(img, seeds, maxits=100, enemies_T=0.7, smooth_cell=True)
+    gc = GrowCut(img, seeds, maxits=100, enemies_T=0.7, smooth_cell=False)
     gc.run()
     labs = gc.get_labeled_im()
 
+    # ilb.score_data(img, labs[0,...])
+
+    seg = skiseg.clear_border(labs[0,...])
     plt.figure()
     plt.subplot(131), plt.imshow(img, 'gray', interpolation='nearest'), plt.title('input'), plt.axis('off')
     plt.subplot(132), plt.imshow(seeds, 'jet', interpolation='nearest'), plt.title('seeds'), plt.axis('off')
     # divider = make_axes_locatable(plt.gca())
     # cax = divider.append_axes('right', size='5%', pad=0.05)
     # plt.colorbar(cax=cax, ticks=np.unique(seeds))
-    plt.subplot(133), plt.imshow(labs[0,...], 'jet', interpolation='nearest', vmin=0), plt.title('segmentation'), plt.axis('off')
+    plt.subplot(133), plt.imshow(seg, 'jet', interpolation='nearest', vmin=0), plt.title('segmentation'), plt.axis('off')
     # divider = make_axes_locatable(plt.gca())
     # cax = divider.append_axes('right', size='5%', pad=0.05)
     # plt.colorbar(cax=cax, ticks=np.unique(seeds))
