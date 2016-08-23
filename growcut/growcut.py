@@ -22,9 +22,8 @@ import skimage.segmentation as skiseg
 
 import sys
 import os
-if os.path.exists('../../imtools/'):
-    # sys.path.append('../imtools/')
-    sys.path.insert(0, '../../imtools/')
+if os.path.exists('/home/tomas/projects/imtools/'):
+    sys.path.insert(0, '/home/tomas/projects/imtools/')
     from imtools import tools, misc
 else:
     print 'Import error in growcut.py. You need to import package imtools: https://github.com/mjirik/imtools'
