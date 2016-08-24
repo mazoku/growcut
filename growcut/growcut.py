@@ -36,7 +36,7 @@ if os.path.exists('../../thesis/'):
 
 
 class GrowCut:
-    def __init__(self, data, seeds, maxits=50, smooth_cell=True, enemies_T=1., nghoodtype='sparse', gui=None):
+    def __init__(self, data, seeds, maxits=50, smooth_cell=True, enemies_T=1., nghoodtype='sparse', gui=None, verbose=True):
         '''
         data ... input data; should be 3D in form [slices, rows, columns]
         seeds ... seed points; same shape as data; background should have label 1
@@ -48,6 +48,7 @@ class GrowCut:
         self.n_classes = self.seeds.max()
         self.maxits = maxits
         self.gui = gui
+        self.verbose = verbose
         self.visfig = None
         self.smooth_cell = smooth_cell
         self.enemies_T = enemies_T
@@ -95,13 +96,15 @@ class GrowCut:
             self.gui.progressbar.set(0, '')
 
         # initialize progressbar
-        widgets = ["Iterations: ", progressbar.Percentage(), " ", progressbar.Bar(), " ", progressbar.ETA()]
-        pbar = progressbar.ProgressBar(maxval=self.maxits, widgets=widgets)
-        pbar.start()
+        if self.verbose:
+            widgets = ["Iterations: ", progressbar.Percentage(), " ", progressbar.Bar(), " ", progressbar.ETA()]
+            pbar = progressbar.ProgressBar(maxval=self.maxits, widgets=widgets)
+            pbar.start()
 
         while (not converged) and (it < self.maxits):
             it += 1
-            pbar.update(it)
+            if self.verbose:
+                pbar.update(it)
             # print 'iteration #%i' % it
             converged = self.iteration()
 
@@ -116,7 +119,8 @@ class GrowCut:
 
             if converged and self.gui:
                 self.gui.statusbar.config( text='Algorithm converged after {0} iterations'.format(it) )
-        pbar.finish()
+        if self.verbose:
+            pbar.finish()
 
         # print 'done'
         # qq = np.reshape( self.labels, self.data.shape )
